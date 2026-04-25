@@ -142,7 +142,7 @@
 
 <script>
 // GAS Webhook URL
-const GAS_URL = "https://script.google.com/macros/s/AKfycbw0wUIPlNkr9qL3D2IhXfeKTulB-XTPVh2Q5MwJPnhrQjUooIC1RSxncu4MKySWkfuy/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzmHDVbakrxVxPwiBH4Aq3l59-ltehmThH9F6OEyYTWQmpDwxLzM7npTSAQEgdAn_8f/exec";
 const LIFF_ID = "YOUR_LIFF_ID_HERE";
 
 let selectedType = "";
@@ -263,26 +263,23 @@ async function sendBets() {
   // ดึง userId จาก LIFF
   let userId = "unknown";
   try {
-    await liff.init({ liffId: LIFF_ID });
     if (liff.isLoggedIn()) {
       const profile = await liff.getProfile();
       userId = profile.userId;
     }
   } catch(e) { console.log("liff profile error", e); }
 
-  // ส่งตรงไปยัง Apps Script
+  // ส่งผ่าน GET (แก้ปัญหา CORS)
   try {
-    const payload = {
-      type:   "liff",
-      userId: userId,
+    const params = new URLSearchParams({
+      type:    "liff",
+      userId:  userId,
       betType: selectedType,
-      numbers: numbers,
+      numbers: numbers.join(","),
       amount:  amount
-    };
-    const res = await fetch(GAS_URL, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(payload)
+    });
+    const res = await fetch(GAS_URL + "?" + params.toString(), {
+      method: "GET",
     });
 
     const total = betList.length * amount;
