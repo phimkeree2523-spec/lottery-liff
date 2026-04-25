@@ -142,7 +142,7 @@
 
 <script>
 // GAS Webhook URL
-const GAS_URL = "YOUR_GAS_URL_HERE";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxg3e1zlkE1tIdYodqB4VzM3gNhRVCTukSbDd0CssUIflWAQKmzmjY_K9qjZ-YcqCgQ/exec";
 const LIFF_ID = "YOUR_LIFF_ID_HERE";
 
 let selectedType = "";
@@ -257,23 +257,43 @@ async function sendBets() {
     alert("กรุณาใส่จำนวนเงินที่ถูกต้องครับ");
     return;
   }
-  const amount = parseInt(amtStr);
-  betList.forEach(item => item.amount = amount);
-
-  // ส่งข้อความกลับไปยัง LINE Chat
+  const amount  = parseInt(amtStr);
   const numbers = betList.map(b => b.number);
-  const msg     = "LIFF:" + selectedType + ":" + numbers.join(",") + ":" + amount;
 
+  // ดึง userId จาก LIFF
+  let userId = "unknown";
   try {
-    await liff.sendMessages([{ type: "text", text: msg }]);
-    // แสดง success
+    await liff.init({ liffId: LIFF_ID });
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      userId = profile.userId;
+    }
+  } catch(e) { console.log("liff profile error", e); }
+
+  // ส่งตรงไปยัง Apps Script
+  try {
+    const payload = {
+      type:   "liff",
+      userId: userId,
+      betType: selectedType,
+      numbers: numbers,
+      amount:  amount
+    };
+    const res = await fetch(GAS_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload)
+    });
+
     const total = betList.length * amount;
     document.getElementById("success-msg").innerHTML =
       selectedType + "<br>" +
       betList.map(b => "เลข " + b.number).join(", ") + "<br>" +
       "ยอดละ " + amount.toLocaleString() + " บ. รวม " + total.toLocaleString() + " บ.";
     document.getElementById("success-overlay").style.display = "flex";
-    setTimeout(() => liff.closeWindow(), 2500);
+    setTimeout(() => {
+      try { liff.closeWindow(); } catch(e) { window.close(); }
+    }, 2500);
   } catch(e) {
     alert("เกิดข้อผิดพลาด กรุณาลองใหม่ครับ");
     console.error(e);
