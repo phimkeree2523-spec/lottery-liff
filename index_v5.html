@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>กรอกโพยหวย</title>
+<script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; }
+  body { background: #f0f0f0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+  .app { width: 100%; max-width: 400px; background: #fff; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  .header { background: #06C755; padding: 12px 16px; color: #fff; display: flex; align-items: center; gap: 10px; }
+  .header h1 { font-size: 16px; font-weight: 600; }
+  .type-badge { background: rgba(255,255,255,0.2); border-radius: 12px; padding: 2px 10px; font-size: 12px; }
+
+  /* Selected list */
+  .list-section { padding: 10px 14px; border-bottom: 1px solid #eee; min-height: 80px; }
+  .list-title { font-size: 12px; color: #999; margin-bottom: 6px; }
+  .empty-msg { color: #ccc; font-size: 13px; text-align: center; padding: 12px 0; }
+  .bet-item { display: flex; align-items: center; justify-content: space-between; background: #f9f9f9; border-radius: 8px; padding: 7px 12px; margin-bottom: 5px; }
+  .bet-num { font-size: 20px; font-weight: 700; color: #333; letter-spacing: 2px; }
+  .bet-del { background: #ffebee; border: none; border-radius: 6px; padding: 4px 10px; color: #e53935; font-size: 12px; cursor: pointer; }
+
+  /* Current input */
+  .input-section { padding: 10px 14px; }
+  .input-display { background: #fffde7; border: 2px solid #f9a825; border-radius: 12px; padding: 10px; text-align: center; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #333; margin-bottom: 6px; }
+  .input-hint { font-size: 12px; color: #999; text-align: center; }
+
+  /* Numpad */
+  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; }
+  .num-btn { background: #fff; border: 1.5px solid #ddd; border-radius: 12px; padding: 16px; font-size: 22px; font-weight: 600; color: #333; cursor: pointer; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,.08); transition: all .1s; -webkit-tap-highlight-color: transparent; }
+  .num-btn:active { background: #e8f5e9; border-color: #06C755; transform: scale(.95); box-shadow: none; }
+  .num-btn.del-btn { background: #fff3e0; border-color: #ffb74d; color: #e65100; font-size: 18px; }
+  .num-btn.del-btn:active { background: #ffe0b2; }
+  .num-btn.zero { grid-column: 2; }
+
+  /* Action buttons */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 14px 16px; }
+  .btn-add { background: #e3f2fd; border: 1.5px solid #1976d2; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600; color: #1565c0; cursor: pointer; text-align: center; transition: all .1s; }
+  .btn-add:active { background: #bbdefb; }
+  .btn-reverse { background: #FF6F00; border: 1.5px solid #E65100; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; text-align: center; transition: all .1s; }
+  .btn-reverse:active { background: #E65100; }
+  .btn-send { background: #06C755; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; text-align: center; transition: all .1s; box-shadow: 0 3px 8px rgba(6,199,85,.3); }
+  .btn-send:active { background: #05a847; transform: scale(.98); }
+  .btn-disabled { opacity: 0.35; pointer-events: none; }
+
+  /* Summary */
+  .summary-bar { background: #f1f8e9; border-top: 1px solid #c5e1a5; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .summary-bar span { font-size: 13px; color: #33691e; font-weight: 500; }
+
+  /* Success */
+  .success-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); justify-content: center; align-items: center; z-index: 100; }
+  .success-box { background: #fff; border-radius: 16px; padding: 28px 24px; text-align: center; max-width: 280px; }
+  .success-icon { font-size: 48px; margin-bottom: 12px; }
+  .success-title { font-size: 18px; font-weight: 700; color: #06C755; margin-bottom: 8px; }
+  .success-msg { font-size: 14px; color: #666; line-height: 1.6; }
+
+  /* Select type screen */
+  .type-screen { padding: 20px 14px; }
+  .type-title { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 14px; text-align: center; }
+  .type-btn { display: block; width: 100%; background: #f9f9f9; border: 1.5px solid #ddd; border-radius: 12px; padding: 16px; font-size: 16px; font-weight: 500; color: #333; cursor: pointer; text-align: center; margin-bottom: 10px; transition: all .15s; }
+  .type-btn:active { background: #e8f5e9; border-color: #06C755; color: #06C755; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>กรอกโพยหวย 🎰</h1>
+    <div class="type-badge" id="type-badge">เลือกประเภท</div>
+  </div>
+
+  <!-- เลือกประเภท -->
+  <div id="screen-type" class="type-screen">
+    <div class="type-title">กรุณาเลือกประเภทหวย</div>
+    <button class="type-btn" onclick="selectType('2 ตัวบน')">2 ตัวบน</button>
+    <button class="type-btn" onclick="selectType('2 ตัวล่าง')">2 ตัวล่าง</button>
+    <button class="type-btn" onclick="selectType('3 ตัวบน')">3 ตัวบน</button>
+    <button class="type-btn" onclick="selectType('3 ตัวโต๊ด')">3 ตัวโต๊ด</button>
+  </div>
+
+  <!-- กรอกเลข -->
+  <div id="screen-input" style="display:none; flex-direction:column; flex:1">
+
+    <!-- รายการที่เพิ่มแล้ว -->
+    <div class="list-section">
+      <div class="list-title">รายการเลข</div>
+      <div id="bet-list"><div class="empty-msg">ยังไม่มีเลข — กดตัวเลขด้านล่าง</div></div>
+    </div>
+
+    <!-- สรุปยอด -->
+    <div class="summary-bar" id="summary-bar" style="display:none">
+      <span id="summary-count">0 รายการ</span>
+      <span id="summary-total">รวม 0 บ.</span>
+    </div>
+
+    <!-- Current input -->
+    <div class="input-section">
+      <div class="input-display" id="input-display">_ _</div>
+      <div class="input-hint" id="input-hint">กดตัวเลข 2 หลัก แล้วกด "เพิ่มเลข"</div>
+    </div>
+
+    <!-- Numpad -->
+    <div class="numpad">
+      <div class="num-btn" onclick="press('1')">1</div>
+      <div class="num-btn" onclick="press('2')">2</div>
+      <div class="num-btn" onclick="press('3')">3</div>
+      <div class="num-btn" onclick="press('4')">4</div>
+      <div class="num-btn" onclick="press('5')">5</div>
+      <div class="num-btn" onclick="press('6')">6</div>
+      <div class="num-btn" onclick="press('7')">7</div>
+      <div class="num-btn" onclick="press('8')">8</div>
+      <div class="num-btn" onclick="press('9')">9</div>
+      <div class="num-btn del-btn" onclick="del()">⌫</div>
+      <div class="num-btn zero" onclick="press('0')">0</div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <div class="btn-add btn-disabled" id="btn-add" onclick="addNumber()">➕ เพิ่มเลข</div>
+      <div class="btn-reverse btn-disabled" id="btn-reverse" onclick="addReverse()">🔄 = แทงกลับ</div>
+    </div>
+    <div class="actions" style="margin-top:0">
+      <div class="btn-send btn-disabled" id="btn-send" onclick="sendBets()" style="grid-column:1/3;width:100%">✅ ส่งโพย</div>
+    </div>
+
+  </div>
+
+  <!-- Success overlay -->
+  <div class="success-overlay" id="success-overlay">
+    <div class="success-box">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">ส่งโพยแล้ว!</div>
+      <div class="success-msg" id="success-msg"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// GAS Webhook URL
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzYRTtKS0Hyg2gQbUyKvQzAoeHP6TlydEKRf3u-0brw8CPYNB2ZpwfKqNF0Z-jGEYh7/exec";
+const LIFF_ID = "YOUR_LIFF_ID_HERE";
+
+let selectedType = "";
+let digits       = 2;
+let current      = "";
+let betList      = []; // [{number, amount}] — amount จะถามแยก หรือใส่ default
+
+// Init LIFF
+async function initLiff() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+  } catch(e) {
+    console.log("LIFF init error:", e);
+  }
+}
+initLiff();
+
+function selectType(type) {
+  selectedType = type;
+  digits       = type.startsWith("2") ? 2 : 3;
+  current      = "";
+  betList      = [];
+  document.getElementById("type-badge").textContent = type;
+  document.getElementById("screen-type").style.display  = "none";
+  document.getElementById("screen-input").style.display = "flex";
+  updateDisplay();
+}
+
+function press(d) {
+  if (current.length >= digits) return;
+  current += d;
+  updateDisplay();
+}
+
+function del() {
+  current = current.slice(0, -1);
+  updateDisplay();
+}
+
+function addReverse() {
+  if (current.length !== digits) return;
+  if (digits !== 2) { alert("แทงกลับรองรับเฉพาะ 2 ตัวเท่านั้นครับ"); return; }
+  const rev = current[1] + current[0];
+  if (rev === current) { alert("เลขนี้กลับแล้วเหมือนเดิมครับ เช่น 11, 22"); return; }
+  // เพิ่มทั้งเลขปกติและเลขกลับ
+  betList.push({ number: current, amount: 0 });
+  betList.push({ number: rev, amount: 0 });
+  current = "";
+  updateDisplay();
+}
+
+function addNumber() {
+  if (current.length !== digits) return;
+  betList.push({ number: current, amount: 0 });
+  current = "";
+  updateDisplay();
+}
+
+function removeItem(i) {
+  betList.splice(i, 1);
+  updateDisplay();
+}
+
+function updateDisplay() {
+  // input display
+  const pad  = "_".repeat(digits);
+  const disp = (current + pad).slice(0, digits).split("").join(" ");
+  document.getElementById("input-display").textContent = disp;
+
+  // hint
+  const remaining = digits - current.length;
+  document.getElementById("input-hint").textContent =
+    remaining > 0
+      ? "กดอีก " + remaining + " หลัก"
+      : "กด \"เพิ่มเลข\" เพื่อใส่เลขนี้";
+
+  // bet list
+  const listEl = document.getElementById("bet-list");
+  if (betList.length === 0) {
+    listEl.innerHTML = '<div class="empty-msg">ยังไม่มีเลข — กดตัวเลขด้านล่าง</div>';
+    document.getElementById("summary-bar").style.display = "none";
+  } else {
+    listEl.innerHTML = betList.map((item, i) =>
+      '<div class="bet-item">' +
+        '<div class="bet-num">' + item.number + '</div>' +
+        '<button class="bet-del" onclick="removeItem(' + i + ')">ลบ</button>' +
+      '</div>'
+    ).join("");
+    document.getElementById("summary-bar").style.display = "flex";
+    document.getElementById("summary-count").textContent = betList.length + " รายการ";
+  }
+
+  // buttons
+  const canAdd     = current.length === digits;
+  const canReverse = current.length === digits && digits === 2;
+  const canSend    = betList.length > 0 || canAdd;
+  document.getElementById("btn-add").className     = "btn-add"     + (canAdd     ? "" : " btn-disabled");
+  document.getElementById("btn-reverse").className = "btn-reverse" + (canReverse ? "" : " btn-disabled");
+  document.getElementById("btn-send").className    = "btn-send"    + (canSend    ? "" : " btn-disabled");
+}
+
+async function sendBets() {
+  // ถ้ายังมีเลขค้างอยู่ ให้เพิ่มก่อน
+  if (current.length === digits) addNumber();
+  if (betList.length === 0) return;
+
+  // ถามยอดด้วย prompt
+  const amtStr = window.prompt(
+    "ใส่ยอดแทงต่อเลข (บาท)\nใช้กับทุกเลข " + betList.length + " รายการ"
+  );
+  if (!amtStr || isNaN(amtStr) || parseInt(amtStr) <= 0) {
+    alert("กรุณาใส่จำนวนเงินที่ถูกต้องครับ");
+    return;
+  }
+  const amount  = parseInt(amtStr);
+  const numbers = betList.map(b => b.number);
+
+  // ดึง userId จาก LIFF
+  let userId = "unknown";
+  try {
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      userId = profile.userId;
+    }
+  } catch(e) { console.log("liff profile error", e); }
+
+  // ส่งผ่าน GET (แก้ปัญหา CORS)
+  try {
+    const params = new URLSearchParams({
+      type:    "liff",
+      userId:  userId,
+      betType: selectedType,
+      numbers: numbers.join(","),
+      amount:  amount
+    });
+    const res = await fetch(GAS_URL + "?" + params.toString(), {
+      method: "GET",
+    });
+
+    const total = betList.length * amount;
+    document.getElementById("success-msg").innerHTML =
+      selectedType + "<br>" +
+      betList.map(b => "เลข " + b.number).join(", ") + "<br>" +
+      "ยอดละ " + amount.toLocaleString() + " บ. รวม " + total.toLocaleString() + " บ.";
+    document.getElementById("success-overlay").style.display = "flex";
+    setTimeout(() => {
+      try { liff.closeWindow(); } catch(e) { window.close(); }
+    }, 2500);
+  } catch(e) {
+    alert("เกิดข้อผิดพลาด กรุณาลองใหม่ครับ");
+    console.error(e);
+  }
+}
+</script>
+</body>
+</html>
