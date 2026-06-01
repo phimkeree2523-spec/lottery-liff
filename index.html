@@ -1611,7 +1611,7 @@ textarea { resize: vertical; min-height: 72px; }
 
 <!-- MODAL: SET DELIVERY DATE -->
 <div id="delivery-modal" class="modal-overlay">
-  <div class="modal-box" style="max-width:480px">
+  <div class="modal-box" style="max-width:480px;max-height:92vh;overflow-y:auto">
     <div class="modal-title">📦 กำหนดวันจัดส่งและแจ้งเตือน</div>
     <input type="hidden" id="dm-order-id"/>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px">
@@ -1634,7 +1634,32 @@ textarea { resize: vertical; min-height: 72px; }
 
     <div class="field" style="margin-bottom:0">
       <label class="lbl">📝 หมายเหตุการจัดส่ง</label>
-      <textarea id="dm-delivery-note" placeholder="เช่น ฝากกับเฝ้ายาม, ส่งทางรถขนส่ง, เบอร์ติดตาม..." style="min-height:64px"></textarea>
+      <textarea id="dm-delivery-note" placeholder="เช่น ฝากกับเฝ้ายาม, ส่งทางรถขนส่ง, เบอร์ติดตาม..." style="min-height:48px"></textarea>
+    </div>
+
+    <!-- Telegram per-bill alert -->
+    <div style="background:#e8f4fd;border:1.5px solid #90cdf4;border-radius:var(--r-sm);padding:12px 14px;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:14px">✈️</span>
+        <span style="font-size:13px;font-weight:700;color:#1a5276;flex:1">แจ้งเตือน Telegram สำหรับใบนี้</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#1a5276;font-weight:600">
+          <input type="checkbox" id="dm-tg-enabled" style="width:16px;height:16px;accent-color:#1d6fa4"/>
+          เปิดใช้งาน
+        </label>
+      </div>
+      <div id="dm-tg-fields" style="display:none">
+        <div class="row2">
+          <div class="field" style="margin-bottom:0">
+            <label class="lbl">📅 วันที่ส่ง Telegram</label>
+            <input type="date" id="dm-tg-date"/>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label class="lbl">⏰ เวลาที่ส่ง</label>
+            <input type="time" id="dm-tg-time" value="08:00"/>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#2980b9;margin-top:6px">⚠ ต้องเปิดหน้าเว็บค้างไว้ ระบบถึงจะส่งอัตโนมัติตามเวลาที่กำหนดได้ครับ</div>
+      </div>
     </div>
 
     <div style="display:flex;gap:8px;margin-top:18px">
@@ -1872,6 +1897,7 @@ function init() {
   showAlertBanners();
   loadDraft();
   setupAutosave();
+  startPerBillChecker();
 }
 
 // ─── TOAST ───
@@ -3371,6 +3397,15 @@ function openDeliveryModal(orderId) {
   document.getElementById('dm-expected-date').value = d.expectedDate || '';
   document.getElementById('dm-alert-date').value = d.alertDate || '';
   document.getElementById('dm-delivery-note').value = d.note || '';
+  // Telegram per-bill
+  const tgEnabled = !!(d.tgDate && d.tgTime);
+  document.getElementById('dm-tg-enabled').checked = tgEnabled;
+  document.getElementById('dm-tg-date').value = d.tgDate || d.alertDate || '';
+  document.getElementById('dm-tg-time').value = d.tgTime || '08:00';
+  document.getElementById('dm-tg-fields').style.display = tgEnabled ? 'block' : 'none';
+  document.getElementById('dm-tg-enabled').onchange = function() {
+    document.getElementById('dm-tg-fields').style.display = this.checked ? 'block' : 'none';
+  };
   document.getElementById('delivery-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -3385,6 +3420,19 @@ function saveDeliveryDates() {
   deliveries[orderId].expectedDate = expected;
   deliveries[orderId].alertDate = alert;
   deliveries[orderId].note = note;
+  // บันทึก Telegram per-bill
+  const tgEnabled = document.getElementById('dm-tg-enabled').checked;
+  const tgDate = document.getElementById('dm-tg-date').value;
+  const tgTime = document.getElementById('dm-tg-time').value;
+  if(tgEnabled && tgDate && tgTime) {
+    deliveries[orderId].tgDate = tgDate;
+    deliveries[orderId].tgTime = tgTime;
+    deliveries[orderId].tgSent = ''; // reset ให้ส่งใหม่ได้
+  } else {
+    delete deliveries[orderId].tgDate;
+    delete deliveries[orderId].tgTime;
+    delete deliveries[orderId].tgSent;
+  }
   persistDeliveries();
   closeModal('delivery');
   renderNotifList(); updateNotifStats(); showAlertBanners();
@@ -3647,14 +3695,29 @@ async function sendToTelegram(text) {
     toast('กรุณาตั้งค่า Bot Token และ Chat ID ก่อน', 'error');
     return false;
   }
-  const url = `https://api.telegram.org/bot${tgConfig.token}/sendMessage`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: tgConfig.chatId, text, parse_mode: 'Markdown' })
-  });
-  const data = await res.json();
-  return data.ok;
+
+  // วิธีที่ 1: POST ตรง (ใช้ได้บน localhost / Live Server)
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${tgConfig.token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: tgConfig.chatId, text, parse_mode: 'Markdown' })
+    });
+    const data = await res.json();
+    if (data.ok) return true;
+  } catch(e) {}
+
+  // วิธีที่ 2: GET ผ่าน URL parameters (ทำงานได้แม้ถูกบล็อก CORS)
+  try {
+    const params = new URLSearchParams({ chat_id: tgConfig.chatId, text, parse_mode: 'Markdown' });
+    await fetch(`https://api.telegram.org/bot${tgConfig.token}/sendMessage?${params}`, {
+      method: 'GET',
+      mode: 'no-cors'
+    });
+    return true;
+  } catch(e) {
+    throw e;
+  }
 }
 
 async function testTelegram() {
@@ -3768,6 +3831,50 @@ function autoCheckTelegramAlert() {
   }).catch(() => {});
 }
 
+// ── Per-bill Telegram Scheduler ──
+
+function checkPerBillTelegramAlerts() {
+  if (!tgConfig.token || !tgConfig.chatId) return;
+  const now = new Date();
+  const todayKey = now.toISOString().split('T')[0];
+  const pad = n => String(n).padStart(2,'0');
+  const currTime = pad(now.getHours()) + ':' + pad(now.getMinutes());
+
+  orders.forEach(o => {
+    const d = deliveries[o.id];
+    if (!d || !d.tgDate || !d.tgTime) return;
+    if (d.deliveredAt) return; // รับแล้ว ไม่ต้องส่ง
+    if (d.tgDate !== todayKey) return; // ไม่ใช่วันนี้
+    if (d.tgTime !== currTime) return; // ยังไม่ถึงเวลา
+    const sentKey = todayKey + '_' + currTime;
+    if (d.tgSent === sentKey) return; // ส่งแล้ว
+
+    // ส่ง Telegram สำหรับใบนี้
+    const ref = d.alertDate || d.expectedDate;
+    const diff = ref ? daysDiff(ref) : null;
+    const diffText = diff === null ? '' : diff < 0 ? ` (เกินกำหนด ${Math.abs(diff)} วัน)` : diff === 0 ? ' (วันนี้!)' : ` (อีก ${diff} วัน)`;
+    const st = getDeliveryStatus(o);
+    const stLabel = { overdue:'⚠ เกินกำหนด', today:'📅 ถึงกำหนดวันนี้', upcoming:'⏰ ใกล้ถึงกำหนด', waiting:'🕐 รอจัดส่ง' };
+    const projectLine = o.project ? '\n📍 ' + o.project : '';
+    const noteLine = d.note ? '\n📝 ' + d.note : '';
+    const stLabelText = stLabel[st] || '🔔 แจ้งเตือน';
+    const text = '⚡ *แจ้งเตือนใบสั่งซื้อ*\n\n📋 *' + o.no + '* — ' + o.seller + projectLine + '\n' + stLabelText + diffText + '\n📦 วันคาดจัดส่ง: ' + (ref ? formatDateTH(ref) : 'ยังไม่กำหนด') + noteLine + '\n\n⏰ แจ้งเตือนตาม: ' + formatDateTH(d.tgDate) + ' เวลา ' + d.tgTime + ' น.';
+
+    sendToTelegram(text).then(ok => {
+      if (ok) {
+        d.tgSent = sentKey;
+        persistDeliveries();
+        toast(`✈️ ส่ง Telegram แจ้งเตือน ${o.no} แล้ว!`, 'info');
+      }
+    }).catch(() => {});
+  });
+}
+
+function startPerBillChecker() {
+  checkPerBillTelegramAlerts();
+  setInterval(checkPerBillTelegramAlerts, 60000); // ตรวจทุก 1 นาที
+}
+
 // ── END TELEGRAM ──
 // ══════════════════════════════════════════
 
@@ -3775,4 +3882,3 @@ init();
 </script>
 </body>
 </html>
-
